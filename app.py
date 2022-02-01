@@ -29,6 +29,11 @@ else:
     for date in trading_days:
         try:
             bhav = nse.bhavcopy_fno(date).loc[symbol]
+            # For PCR
+            pe_oi = bhav['OPEN_INT'][(bhav.OPTION_TYP=='PE')].sum()
+            ce_oi = bhav['OPEN_INT'][(bhav.OPTION_TYP=='CE')].sum()
+            pcr = pe_oi/ce_oi
+            # PCR end
             bhav = bhav[bhav["INSTRUMENT"].isin(["FUTSTK", "FUTIDX"])]
             expiry_list = list(bhav["EXPIRY_DT"].sort_values())
             current_expiry = expiry_list[0]
@@ -45,6 +50,7 @@ else:
             bhav["OPEN_INT"] = coi
             bhav["CHG_IN_OI"] = ccoi
             bhav["SYMBOLS"] = symbol
+            bhav["PCR"] = pcr
 
             bhav.set_index("DATE", inplace=True)
             data = data.append(bhav)
@@ -62,6 +68,7 @@ else:
             "CONTRACTS",
             "OPEN_INT",
             "CHG_IN_OI",
+            "PCR",
         ]
     ]  
     data.index = data.index.map(pd.to_datetime)
@@ -72,19 +79,24 @@ else:
     data['EXPIRY_DT'] = pd.to_datetime(data['EXPIRY_DT']).dt.date
     
     def color_negative_red(value):
-        """
-        Colors elements in a dateframe
-        green if positive and red if
-        negative. Does not color NaN
-        values.
-        """
         if value < 0:
             color = 'red'
-        # elif value > 0:
-        #     color = 'green'
         else:
             color = 'white'
         return 'color: %s' % color
 
-    data = data.style.applymap(color_negative_red, subset=['%_CHG_IN_PRICE','%_CHG_IN_OI'])    
+    def color_pcr(value):
+        if value <= 0.8:
+            color = 'red'
+        elif value > 1.6:
+            color = 'green'
+        else:
+            color = 'white'
+        return 'color: %s' % color
+   
+    data = data.style.\
+        applymap(color_negative_red, subset=['%_CHG_IN_PRICE','%_CHG_IN_OI']).\
+        applymap(color_pcr, subset=['PCR']).\
+        format(subset=['OPEN', 'HIGH', 'LOW', 'CLOSE', 'PCR', '%_CHG_IN_PRICE', '%_CHG_IN_OI'], formatter='{:.2f}')
+
     st.write(data)
